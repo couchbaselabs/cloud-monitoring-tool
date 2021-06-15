@@ -1,0 +1,7 @@
+version: "3"
+services:
+  cloud_monitoring_tool:
+    build:
+      context: .
+    env_file:
+      - .env
