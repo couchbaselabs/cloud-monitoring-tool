@@ -29,7 +29,7 @@ COUCHBASE_CLOUD_SECRET_KEY=
 `docker-compose -f "docker-compose.dev.yml" up --build cloud_monitoring_tool`
 
 ##Release
-To release the tool needs to be bundled into a docker image and pushed to a container registry. We use AWS ECR for this:
+To release the tool, it needs to be bundled into a docker image and pushed to a container registry. We use AWS ECR for this:
 
 `./release.sh {{ AWS_ECR_REGISTRY_URL }}`
 
