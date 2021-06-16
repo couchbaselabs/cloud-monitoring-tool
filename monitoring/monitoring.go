@@ -608,9 +608,3 @@ func AnalyseAWS() (*GlobalCloudContext, error) {
 
 	return globalCtx, nil
 }
-
-
-
-
-
-

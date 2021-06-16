@@ -17,8 +17,6 @@ const slackChannelIdEnv = "SLACK_CHANNEL_ID"
 const dateLayout = "1 Jan, 2006 at 3:04pm (UTC)"
 const throttleDuration = time.Second
 
-const repositoryUrl = "https://github.com/couchbaselabs/cloud-monitoring-tool"
-
 type CloudMonitoringSlackBot struct {
 	GlobalCloudContext *monitoring.GlobalCloudContext
 }
