@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/eks"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/sts"
-	"github.com/couchbaselabs/cloud-monitoring-tool/couchbasecloudclient"
+	"github.com/couchbaselabs/couchbase-cloud-go-client/couchbasecloud"
 	"log"
 	"math"
 	"os"
@@ -167,13 +167,13 @@ func getCallerId(s *session.Session) (*string, error) {
 	return result.User.UserName, err
 }
 
-func getCouchbaseClouds(client *couchbasecloudclient.CouchbaseCloudClient) (map[string]*CouchbaseCloud, error) {
+func getCouchbaseClouds(client *couchbasecloud.CouchbaseCloudClient) (map[string]*CouchbaseCloud, error) {
 	clouds := map[string]*CouchbaseCloud{}
 	page := 1
 	lastPage := math.MaxInt16
 
 	for ok := true; ok; ok = page <= lastPage {
-		listCloudsResponse, err := client.ListClouds(&couchbasecloudclient.ListCloudsOptions{Page: page, PerPage: 10})
+		listCloudsResponse, err := client.ListClouds(&couchbasecloud.ListCloudsOptions{Page: page, PerPage: 10})
 
 		if err != nil {
 			return nil, err
@@ -199,13 +199,13 @@ func getCouchbaseClouds(client *couchbasecloudclient.CouchbaseCloudClient) (map[
 	return clouds, nil
 }
 
-func getCouchbaseClusters(client *couchbasecloudclient.CouchbaseCloudClient) (map[string]*CouchbaseCloudCluster, error) {
+func getCouchbaseClusters(client *couchbasecloud.CouchbaseCloudClient) (map[string]*CouchbaseCloudCluster, error) {
 	clusters := map[string]*CouchbaseCloudCluster{}
 	page := 1
 	lastPage := math.MaxInt16
 
 	for ok := true; ok; ok = page <= lastPage {
-		listClustersResponse, err := client.ListClusters(&couchbasecloudclient.ListClustersOptions{Page: page, PerPage: 10})
+		listClustersResponse, err := client.ListClusters(&couchbasecloud.ListClustersOptions{Page: page, PerPage: 10})
 
 		if err != nil {
 			return nil, err
@@ -533,7 +533,7 @@ func cleanup(ctx *RegionalCloudContext, couchbaseClouds map[string]*CouchbaseClo
 }
 
 func AnalyseAWS() (*GlobalCloudContext, error) {
-	client := couchbasecloudclient.NewClient(os.Getenv(cbcApiAccessKeyEnv), os.Getenv(cbcApiSecretKeyEnv))
+	client := couchbasecloud.NewClient(os.Getenv(cbcApiAccessKeyEnv), os.Getenv(cbcApiSecretKeyEnv))
 	couchbaseCloudsRemaining, err := getCouchbaseClouds(client)
 
 	if err != nil {
