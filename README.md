@@ -19,11 +19,17 @@ SLACK_BOT_TOKEN=
 
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
-AWS_PRIMARY_ROLE_ARN=
+AWS_ROLE_ARNS=
 
-COUCHBASE_CLOUD_ACCESS_KEY=
-COUCHBASE_CLOUD_SECRET_KEY=
+COUCHBASE_CLOUD_ACCESS_KEYS=
+COUCHBASE_CLOUD_SECRET_KEYS=
 ```
+
+The following variables can support comma separated values in order to add multiple couchbase cloud tenants and AWS 
+accounts: `AWS_ROLE_ARNS, COUCHBASE_CLOUD_ACCESS_KEYS, COUCHBASE_CLOUD_SECRET_KEYS`
+
+When adding multiple couchbase cloud tenant API keys, the position of the access key should match the position of the
+secret key in their respective comma separated values.
 
 ####Run with dev/test configuration
 `docker-compose -f "docker-compose.dev.yml" up --build cloud_monitoring_tool`
