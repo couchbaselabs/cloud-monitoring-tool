@@ -44,6 +44,6 @@ To deploy in production, use the same registry URL the image was published to. T
 that schedules the tool to run once a day. The script expects to find a `.env` file in the home directory with the above
 variables:
 
-`./deploy.sh $HOME {{ AWS_ECR_REGISTRY_URL }}`
+`sudo ./deploy.sh $HOME {{ AWS_ECR_REGISTRY_URL }}`
 
 Note: The server must have `aws-cli` set up and configured

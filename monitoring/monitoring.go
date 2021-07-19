@@ -599,8 +599,6 @@ func getCouchbaseCloudData(accessKeys []string, secretKeys []string) (map[string
 	return clouds, clusters, nil
 }
 
-
-
 func AnalyseAWS() (*GlobalCloudContext, error) {
 	cbcAccessKeys := split(os.Getenv(cbcApiAccessKeysEnv))
 	cbcSecretKeys := split(os.Getenv(cbcApiSecretKeysEnv))
@@ -686,8 +684,6 @@ func AnalyseAWS() (*GlobalCloudContext, error) {
 			globalCtx.Add(*ctx)
 		}
 	}
-
-
 
 	return globalCtx, nil
 }
