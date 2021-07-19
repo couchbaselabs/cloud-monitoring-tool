@@ -2,6 +2,7 @@ github.com/aws/aws-sdk-go v1.38.57 h1:Jo6uOnWNbj4jL/8t/XUrHOKm1J6pPcYFhGzda20UcU
 github.com/aws/aws-sdk-go v1.38.57/go.mod h1:hcU610XS61/+aQV88ixoOzUoG7v3b31pl2zKMmprdro=
 github.com/couchbaselabs/couchbase-cloud-go-client v0.0.0-20210616121830-eb4783681cd6 h1:yuQ29KnopjC31V54tojHTbGSVoIVhUapq2dxKAyC3yM=
 github.com/couchbaselabs/couchbase-cloud-go-client v0.0.0-20210616121830-eb4783681cd6/go.mod h1:qdahbUroRkvaY65rxUETm3ITLoLKvqaGzWWkmGALF8A=
+github.com/couchbaselabs/couchbase-cloud-go-client v0.0.0-20210617143257-93117346a2a2 h1:aimaGpeBFVlXwMxkHH4lqtLnw3rCOVnDiMrBup7wsMA=
 github.com/couchbaselabs/couchbase-cloud-go-client v0.0.0-20210617143257-93117346a2a2/go.mod h1:kWLbzr/LQ7/Lor8/l4oig3lVvrn0OrIasae0/W4PjtM=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=

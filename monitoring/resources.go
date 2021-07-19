@@ -17,6 +17,7 @@ type CloudResource struct {
 	Region     string
 	Tags       map[string]string
 	CreatedAt  time.Time
+	Account    string
 }
 
 type EBSVolume struct {

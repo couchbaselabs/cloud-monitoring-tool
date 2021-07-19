@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -14,12 +15,13 @@ import (
 	"log"
 	"math"
 	"os"
+	"strings"
 	"time"
 )
 
-const cbcApiAccessKeyEnv = "COUCHBASE_CLOUD_ACCESS_KEY"
-const cbcApiSecretKeyEnv = "COUCHBASE_CLOUD_SECRET_KEY"
-const awsPrimaryRoleArnEnv = "AWS_PRIMARY_ROLE_ARN"
+const cbcApiAccessKeysEnv = "COUCHBASE_CLOUD_ACCESS_KEYS"
+const cbcApiSecretKeysEnv = "COUCHBASE_CLOUD_SECRET_KEYS"
+const awsRoleArns = "AWS_ROLE_ARNS"
 
 const awsSessionName = "cloud-monitoring-tool"
 const ec2EksClusterNameTag = "cluster"
@@ -44,7 +46,7 @@ func processEC2Claims(ctx *RegionalCloudContext) {
 	}
 
 	ebsCountAfter := len(ctx.EBSVolumes)
-	log.Printf("Processed EC2 claims (%d EBS volumes)", ebsCountBefore - ebsCountAfter)
+	log.Printf("Processed EC2 claims (%d EBS volumes)", ebsCountBefore-ebsCountAfter)
 }
 
 func processCouchbaseCloudClusterClaims(ctx *RegionalCloudContext) {
@@ -66,7 +68,7 @@ func processCouchbaseCloudClusterClaims(ctx *RegionalCloudContext) {
 	}
 
 	ec2CountAfter := len(ctx.EC2Instances)
-	log.Printf("Processed Couchbase Cloud Cluster claims (%d EC2 instances)", ec2CountBefore - ec2CountAfter)
+	log.Printf("Processed Couchbase Cloud Cluster claims (%d EC2 instances)", ec2CountBefore-ec2CountAfter)
 }
 
 func processEKSClusterClaims(ctx *RegionalCloudContext) {
@@ -98,7 +100,7 @@ func processEKSClusterClaims(ctx *RegionalCloudContext) {
 
 	cbcCountAfter := len(ctx.CouchbaseCloudClusters)
 	ec2CountAfter := len(ctx.EC2Instances)
-	log.Printf("Processed EKS Cluster claims (%d EC2 instances, %d CBC clusters)", ec2CountBefore - ec2CountAfter, cbcCountBefore - cbcCountAfter)
+	log.Printf("Processed EKS Cluster claims (%d EC2 instances, %d CBC clusters)", ec2CountBefore-ec2CountAfter, cbcCountBefore-cbcCountAfter)
 }
 
 func processCloudformationStackClaims(ctx *RegionalCloudContext) {
@@ -116,7 +118,7 @@ func processCloudformationStackClaims(ctx *RegionalCloudContext) {
 	}
 
 	ec2CountAfter := len(ctx.EC2Instances)
-	log.Printf("Processed Cloudformation Stack claims (%d EC2 instances)", ec2CountBefore - ec2CountAfter)
+	log.Printf("Processed Cloudformation Stack claims (%d EC2 instances)", ec2CountBefore-ec2CountAfter)
 }
 
 func processCouchbaseCloudClaims(ctx *RegionalCloudContext) {
@@ -137,7 +139,7 @@ func processCouchbaseCloudClaims(ctx *RegionalCloudContext) {
 
 	eksCountAfter := len(ctx.EKSClusters)
 	cfStackCountAfter := len(ctx.CloudFormationStacks)
-	log.Printf("Processed Couchbase Cloud claims (%d EKS clusters, %d CF stacks)", eksCountBefore - eksCountAfter, cfStackCountBefore - cfStackCountAfter)
+	log.Printf("Processed Couchbase Cloud claims (%d EKS clusters, %d CF stacks)", eksCountBefore-eksCountAfter, cfStackCountBefore-cfStackCountAfter)
 }
 
 func assumeRole(role string, sess *session.Session, roleSessionName string) (*sts.Credentials, error) {
@@ -167,16 +169,16 @@ func getCallerId(s *session.Session) (*string, error) {
 	return result.User.UserName, err
 }
 
-func getCouchbaseClouds(client *couchbasecloud.CouchbaseCloudClient) (map[string]*CouchbaseCloud, error) {
-	clouds := map[string]*CouchbaseCloud{}
+func getCouchbaseClouds(client *couchbasecloud.CouchbaseCloudClient, clouds map[string]*CouchbaseCloud) error {
 	page := 1
 	lastPage := math.MaxInt16
+	cloudCount := 0
 
 	for ok := true; ok; ok = page <= lastPage {
 		listCloudsResponse, err := client.ListClouds(&couchbasecloud.ListCloudsOptions{Page: page, PerPage: 10})
 
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		for _, cloudResponse := range listCloudsResponse.Data {
@@ -189,26 +191,27 @@ func getCouchbaseClouds(client *couchbasecloud.CouchbaseCloudClient) (map[string
 			cloud.VirtualNetworkCIDR = cloudResponse.VirtualNetworkCIDR
 			cloud.VirtualNetworkID = cloudResponse.VirtualNetworkID
 			clouds[cloud.ID] = cloud
+			cloudCount++
 		}
 
 		lastPage = listCloudsResponse.Cursor.Pages.Last
 		page++
 	}
 
-	log.Printf("Found %d Couchbase Clouds", len(clouds))
-	return clouds, nil
+	log.Printf("Found %d Couchbase Clouds", cloudCount)
+	return nil
 }
 
-func getCouchbaseClusters(client *couchbasecloud.CouchbaseCloudClient) (map[string]*CouchbaseCloudCluster, error) {
-	clusters := map[string]*CouchbaseCloudCluster{}
+func getCouchbaseClusters(client *couchbasecloud.CouchbaseCloudClient, clusters map[string]*CouchbaseCloudCluster) error {
 	page := 1
 	lastPage := math.MaxInt16
+	clusterCount := 0
 
 	for ok := true; ok; ok = page <= lastPage {
 		listClustersResponse, err := client.ListClusters(&couchbasecloud.ListClustersOptions{Page: page, PerPage: 10})
 
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		for _, clusterResponse := range listClustersResponse.Data {
@@ -218,17 +221,18 @@ func getCouchbaseClusters(client *couchbasecloud.CouchbaseCloudClient) (map[stri
 			cluster.NodeCount = clusterResponse.Nodes
 			cluster.Services = clusterResponse.Services
 			clusters[cluster.ID] = cluster
+			clusterCount++
 		}
 
 		lastPage = listClustersResponse.Cursor.Pages.Last
 		page++
 	}
 
-	log.Printf("Found %d Couchbase Clusters", len(clusters))
-	return clusters, nil
+	log.Printf("Found %d Couchbase Clusters", clusterCount)
+	return nil
 }
 
-func getEBSVolumes(ec2Svc *ec2.EC2, region string) (map[string]EBSVolume, error) {
+func getEBSVolumes(ec2Svc *ec2.EC2, account string, region string) (map[string]EBSVolume, error) {
 	ebsVolumes := map[string]EBSVolume{}
 
 	input := &ec2.DescribeVolumesInput{
@@ -240,6 +244,7 @@ func getEBSVolumes(ec2Svc *ec2.EC2, region string) (map[string]EBSVolume, error)
 			id := *volume.VolumeId
 			ebsVolume := NewEBSVolume()
 			ebsVolume.ID = id
+			ebsVolume.Account = account
 			ebsVolume.Region = region
 
 			if volume.CreateTime != nil {
@@ -286,7 +291,7 @@ func getEBSVolumes(ec2Svc *ec2.EC2, region string) (map[string]EBSVolume, error)
 	return ebsVolumes, nil
 }
 
-func getEC2Instances(ec2Service *ec2.EC2, region string) (map[string]EC2Instance, error) {
+func getEC2Instances(ec2Service *ec2.EC2, account string, region string) (map[string]EC2Instance, error) {
 	ec2Instances := map[string]EC2Instance{}
 
 	input := &ec2.DescribeInstancesInput{
@@ -299,6 +304,7 @@ func getEC2Instances(ec2Service *ec2.EC2, region string) (map[string]EC2Instance
 				id := *instanceDescription.InstanceId
 				ec2Instance := NewEC2Instance()
 				ec2Instance.ID = id
+				ec2Instance.Account = account
 				ec2Instance.Region = region
 				ec2Instance.InstanceBlockDeviceMappings = instanceDescription.BlockDeviceMappings
 
@@ -348,7 +354,7 @@ func getEC2Instances(ec2Service *ec2.EC2, region string) (map[string]EC2Instance
 	return ec2Instances, nil
 }
 
-func getEKSClusters(sess *session.Session, awsCredentials *sts.Credentials, region string) (map[string]EKSCluster, error) {
+func getEKSClusters(sess *session.Session, awsCredentials *sts.Credentials, account string, region string) (map[string]EKSCluster, error) {
 	eksClustersMap := map[string]EKSCluster{}
 
 	eksService := eks.New(sess, &aws.Config{
@@ -381,6 +387,8 @@ func getEKSClusters(sess *session.Session, awsCredentials *sts.Credentials, regi
 
 		now := time.Now()
 		eksCluster := NewEKSCluster()
+		eksCluster.Account = account
+		eksCluster.Region = region
 
 		if clusterDescription.Cluster.Name != nil {
 			eksCluster.Name = *clusterDescription.Cluster.Name
@@ -412,7 +420,7 @@ func getEKSClusters(sess *session.Session, awsCredentials *sts.Credentials, regi
 	return eksClustersMap, nil
 }
 
-func getCloudformationStacks(sess *session.Session, awsCredentials *sts.Credentials, region string) (map[string]CloudformationStack, error) {
+func getCloudformationStacks(sess *session.Session, awsCredentials *sts.Credentials, account string, region string) (map[string]CloudformationStack, error) {
 	cloudformationStacksMap := map[string]CloudformationStack{}
 
 	cloudformationService := cloudformation.New(sess, &aws.Config{
@@ -432,6 +440,7 @@ func getCloudformationStacks(sess *session.Session, awsCredentials *sts.Credenti
 
 	for _, stackDescription := range result.Stacks {
 		cloudformationStack := NewCloudFormationStack()
+		cloudformationStack.Account = account
 
 		if stackDescription.StackId != nil {
 			cloudformationStack.ID = *stackDescription.StackId
@@ -509,43 +518,108 @@ func getEC2Service(sess *session.Session, awsCredentials *sts.Credentials, regio
 	return ec2Svc
 }
 
-// Set the Couchbase Cloud resources belonging to this context and remove them from the resources remaining to be seen
-func cleanup(ctx *RegionalCloudContext, couchbaseClouds map[string]*CouchbaseCloud, couchbaseClusters map[string]*CouchbaseCloudCluster) {
-	couchbaseCloudsSeen := map[string]*CouchbaseCloud{}
-	couchbaseCloudClustersSeen := map[string]*CouchbaseCloudCluster{}
-
-	for _, cloud := range ctx.CouchbaseClouds {
-		if cloud.Seen {
-			couchbaseCloudsSeen[cloud.ID] = cloud
-			delete(couchbaseClouds, cloud.ID)
-		}
-	}
-
-	for _, cluster := range ctx.CouchbaseCloudClusters {
-		if cluster.Seen {
-			couchbaseCloudClustersSeen[cluster.ID] = cluster
-			delete(couchbaseClusters, cluster.ID)
-		}
-	}
-
-	ctx.CouchbaseClouds = couchbaseCloudsSeen
-	ctx.CouchbaseCloudClusters = couchbaseCloudClustersSeen
+func split(value string) []string {
+	return strings.Split(value, ",")
 }
 
-func AnalyseAWS() (*GlobalCloudContext, error) {
-	client := couchbasecloud.NewClient(os.Getenv(cbcApiAccessKeyEnv), os.Getenv(cbcApiSecretKeyEnv))
-	couchbaseCloudsRemaining, err := getCouchbaseClouds(client)
+func deepCopyCouchbaseCloudData(clouds map[string]*CouchbaseCloud, clusters map[string]*CouchbaseCloudCluster) (map[string]*CouchbaseCloud, map[string]*CouchbaseCloudCluster, error) {
+	cloudsCopy := map[string]*CouchbaseCloud{}
+	clustersCopy := map[string]*CouchbaseCloudCluster{}
 
+	cloudsJson, err := json.Marshal(clouds)
 	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve couchbase Couchbase Clouds: %s", err)
+		return nil, nil, err
+	}
+	err = json.Unmarshal(cloudsJson, &cloudsCopy)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	couchbaseClustersRemaining, err := getCouchbaseClusters(client)
+	clustersJson, err := json.Marshal(clusters)
 	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve couchbase Couchbase clusters: %s", err)
+		return nil, nil, err
+	}
+	err = json.Unmarshal(clustersJson, &clustersCopy)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return cloudsCopy, clustersCopy, nil
+}
+
+func getStringInBetween(str, start, end string) string {
+	var match []byte
+	index := strings.Index(str, start)
+
+	if index == -1 {
+		return ""
+	}
+
+	index += len(start)
+
+	for {
+		char := str[index]
+
+		if strings.HasPrefix(str[index:index+len(match)], end) {
+			break
+		}
+
+		match = append(match, char)
+		index++
+	}
+
+	return string(match[:])
+}
+
+func getCouchbaseCloudData(accessKeys []string, secretKeys []string) (map[string]*CouchbaseCloud, map[string]*CouchbaseCloudCluster, error) {
+	if len(accessKeys) != len(secretKeys) {
+		return nil, nil, fmt.Errorf("incorrect configuration for couchbase cloud API keys")
+	}
+
+	clouds := map[string]*CouchbaseCloud{}
+	clusters := map[string]*CouchbaseCloudCluster{}
+
+	for idx := range accessKeys {
+		accessKey := accessKeys[idx]
+		secretKey := secretKeys[idx]
+
+		client := couchbasecloud.NewClient(accessKey, secretKey)
+		err := getCouchbaseClouds(client, clouds)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to retrieve couchbase Couchbase Clouds: %s", err)
+		}
+
+		err = getCouchbaseClusters(client, clusters)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to retrieve couchbase Couchbase clusters: %s", err)
+		}
+	}
+
+	return clouds, clusters, nil
+}
+
+
+
+func AnalyseAWS() (*GlobalCloudContext, error) {
+	cbcAccessKeys := split(os.Getenv(cbcApiAccessKeysEnv))
+	cbcSecretKeys := split(os.Getenv(cbcApiSecretKeysEnv))
+
+	couchbaseClouds, couchbaseCloudClusters, err := getCouchbaseCloudData(cbcAccessKeys, cbcSecretKeys)
+
+	if err != nil {
+		return nil, err
+	}
+
+	couchbaseCloudsCtx, couchbaseCloudClustersCtx, err := deepCopyCouchbaseCloudData(couchbaseClouds, couchbaseCloudClusters)
+
+	if err != nil {
+		return nil, err
 	}
 
 	globalCtx := NewGlobalCloudContext()
+	globalCtx.CouchbaseClouds = couchbaseClouds
+	globalCtx.CouchbaseCloudClusters = couchbaseCloudClusters
 
 	awsSession, err := session.NewSession()
 	if err != nil {
@@ -557,54 +631,63 @@ func AnalyseAWS() (*GlobalCloudContext, error) {
 		return nil, fmt.Errorf("unable to get AWS Caller ID: %s", err)
 	}
 
-	awsCredentials, err := assumeRole(os.Getenv(awsPrimaryRoleArnEnv), awsSession, fmt.Sprintf("%s-%v", awsSessionName, callerId))
-	if err != nil {
-		return nil, fmt.Errorf("unable to assume AWS role: %s", err)
+	awsRoleArns := split(os.Getenv(awsRoleArns))
+
+	for _, awsRoleArn := range awsRoleArns {
+		log.Printf("Assuming role %s", awsRoleArn)
+		awsCredentials, err := assumeRole(awsRoleArn, awsSession, fmt.Sprintf("%s-%v", awsSessionName, callerId))
+
+		if err != nil {
+			return nil, fmt.Errorf("unable to assume AWS role: %s", err)
+		}
+
+		account := getStringInBetween(awsRoleArn, "arn:aws:iam::", ":")
+
+		for _, region := range regions {
+			log.Printf("Analysing AWS %s", region)
+
+			ec2Service := getEC2Service(awsSession, awsCredentials, region)
+
+			ebsVolumes, err := getEBSVolumes(ec2Service, account, region)
+			if err != nil {
+				return nil, fmt.Errorf("unable to get EBS Volumes in account: %s, region: %s. %s", account, region, err)
+			}
+
+			ec2Instances, err := getEC2Instances(ec2Service, account, region)
+			if err != nil {
+				return nil, fmt.Errorf("unable to get EC2 Instances in account: %s, region: %s. %s", account, region, err)
+			}
+
+			eksClusters, err := getEKSClusters(awsSession, awsCredentials, account, region)
+			if err != nil {
+				return nil, fmt.Errorf("unable to get EKS clusters in account: %s, region: %s. %s", account, region, err)
+			}
+
+			cloudformationStacks, err := getCloudformationStacks(awsSession, awsCredentials, account, region)
+			if err != nil {
+				return nil, fmt.Errorf("unable to get Cloudformation stacks in account: %s, region: %s. %s", account, region, err)
+			}
+
+			ctx := NewRegionalCloudContext(account, region)
+
+			ctx.EBSVolumes = ebsVolumes
+			ctx.EC2Instances = ec2Instances
+			ctx.CouchbaseCloudClusters = couchbaseCloudClustersCtx
+			ctx.EKSClusters = eksClusters
+			ctx.CloudFormationStacks = cloudformationStacks
+			ctx.CouchbaseClouds = couchbaseCloudsCtx
+
+			processEC2Claims(ctx)
+			processCouchbaseCloudClusterClaims(ctx)
+			processEKSClusterClaims(ctx)
+			processCloudformationStackClaims(ctx)
+			processCouchbaseCloudClaims(ctx)
+
+			globalCtx.Add(*ctx)
+		}
 	}
 
-	for _, region := range regions {
-		log.Printf("Analysing AWS %s", region)
 
-		ec2Service := getEC2Service(awsSession, awsCredentials, region)
-
-		ebsVolumes, err := getEBSVolumes(ec2Service, region)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get EBS Volumes in %s: %s", region, err)
-		}
-
-		ec2Instances, err := getEC2Instances(ec2Service, region)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get EC2 Instances in %s: %s", region, err)
-		}
-
-		eksClusters, err := getEKSClusters(awsSession, awsCredentials, region)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get EKS clusters in %s: %s", region, err)
-		}
-
-		cloudformationStacks, err := getCloudformationStacks(awsSession, awsCredentials, region)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get Cloudformation stacks in %s: %s", region, err)
-		}
-
-		ctx := NewRegionalCloudContext(region)
-
-		ctx.EBSVolumes = ebsVolumes
-		ctx.EC2Instances = ec2Instances
-		ctx.CouchbaseCloudClusters = couchbaseClustersRemaining
-		ctx.EKSClusters = eksClusters
-		ctx.CloudFormationStacks = cloudformationStacks
-		ctx.CouchbaseClouds = couchbaseCloudsRemaining
-
-		processEC2Claims(ctx)
-		processCouchbaseCloudClusterClaims(ctx)
-		processEKSClusterClaims(ctx)
-		processCloudformationStackClaims(ctx)
-		processCouchbaseCloudClaims(ctx)
-		cleanup(ctx, couchbaseCloudsRemaining, couchbaseClustersRemaining)
-
-		globalCtx.Add(*ctx)
-	}
 
 	return globalCtx, nil
 }

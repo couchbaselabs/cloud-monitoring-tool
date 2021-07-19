@@ -45,18 +45,15 @@ func (bot *CloudMonitoringSlackBot) PostThreadedReport() error {
 	var ec2Instances []monitoring.EC2Instance
 	var ebsVolumes []monitoring.EBSVolume
 
+	for _, couchbaseCloud := range bot.GlobalCloudContext.CouchbaseClouds {
+		couchbaseClouds = append(couchbaseClouds, *couchbaseCloud)
+	}
+
+	for _, couchbaseCluster := range bot.GlobalCloudContext.CouchbaseCloudClusters {
+		couchbaseCloudClusters = append(couchbaseCloudClusters, *couchbaseCluster)
+	}
+
 	for _, regionalCtx := range bot.GlobalCloudContext.RegionalCloudContexts {
-		for _, couchbaseCloud := range regionalCtx.CouchbaseClouds {
-			couchbaseClouds = append(couchbaseClouds, *couchbaseCloud)
-		}
-
-		for _, couchbaseCluster := range regionalCtx.CouchbaseCloudClusters {
-			couchbaseCloudClusters = append(couchbaseCloudClusters, *couchbaseCluster)
-		}
-
-		deepCouchbaseClusters := findCouchbaseCloudClusters(regionalCtx.CouchbaseClouds)
-		couchbaseCloudClusters = append(couchbaseCloudClusters, deepCouchbaseClusters...)
-
 		for _, cloudformationStack := range regionalCtx.CloudFormationStacks {
 			cloudformationStacks = append(cloudformationStacks, cloudformationStack)
 		}
@@ -202,20 +199,6 @@ func getSlackDividerBlock() *slack.DividerBlock {
 	return slack.NewDividerBlock()
 }
 
-func findCouchbaseCloudClusters(couchbaseClouds map[string]*monitoring.CouchbaseCloud) []monitoring.CouchbaseCloudCluster {
-	var couchbaseClusters []monitoring.CouchbaseCloudCluster
-
-	for _, cloud := range couchbaseClouds {
-		for _, eksCluster := range cloud.EKSClusters {
-			for _, couchbaseCluster := range eksCluster.CouchbaseCloudClusters {
-				couchbaseClusters = append (couchbaseClusters, couchbaseCluster)
-			}
-		}
-	}
-
-	return couchbaseClusters
-}
-
 func sendCouchbaseCloudReplies(client *slack.Client, channelId string, couchbaseClouds []monitoring.CouchbaseCloud, timestamp string) {
 	log.Println("Sending throttled slack replies for Couchbase Cloud")
 	for _, cloud := range couchbaseClouds {
@@ -267,6 +250,7 @@ func sendCloudformationStackReplies(client *slack.Client, channelId string, clou
 		}
 
 		message.WriteString(fmt.Sprintf("*Created*: `%s`\n", cloudformationStack.CreatedAt.UTC().Format(dateLayout)))
+		message.WriteString(fmt.Sprintf("*Account*: `%s`\n", cloudformationStack.Account))
 
 		if err := sendSlackReply(client, channelId, timestamp, message.String()); err != nil {
 			log.Printf("Unable to send Slack reply: %s", err)
@@ -283,6 +267,7 @@ func sendEKSClusterReplies(client *slack.Client, channelId string, eksClusters [
 		message.WriteString(fmt.Sprintf("*Subnets*: `%d`\n", len(eksCluster.Subnets)))
 		message.WriteString(fmt.Sprintf("*Age*: `%s`\n", eksCluster.Age))
 		message.WriteString(fmt.Sprintf("Created: `%s`\n", eksCluster.CreatedAt.UTC().Format(dateLayout)))
+		message.WriteString(fmt.Sprintf("*Account*: `%s`\n", eksCluster.Account))
 
 		if err := sendSlackReply(client, channelId, timestamp, message.String()); err != nil {
 			log.Printf("Unable to send Slack reply: %s", err)
@@ -313,6 +298,7 @@ func sendEC2InstancesReplies(client *slack.Client, channelId string, ec2Instance
 		}
 
 		message.WriteString(fmt.Sprintf("*Launch Time*: `%s`\n", ec2Instance.CreatedAt.UTC().Format(dateLayout)))
+		message.WriteString(fmt.Sprintf("*Account*: `%s`\n", ec2Instance.Account))
 
 		if err := sendSlackReply(client, channelId, timestamp, message.String()); err != nil {
 			log.Printf("Unable to send Slack reply: %s", err)
@@ -336,6 +322,7 @@ func sendEBSInstancesReplies(client *slack.Client, channelId string, ebsVolumes 
 		message.WriteString(fmt.Sprintf("*Size GiB*: `%d`\n", ebsVolume.SizeGiB))
 		message.WriteString(fmt.Sprintf("*State*: `%s`\n", ebsVolume.State))
 		message.WriteString(fmt.Sprintf("*Created*: `%s`\n", ebsVolume.CreatedAt.UTC().Format(dateLayout)))
+		message.WriteString(fmt.Sprintf("*Account*: `%s`\n", ebsVolume.Account))
 
 		if err := sendSlackReply(client, channelId, timestamp, message.String()); err != nil {
 			log.Printf("Unable to send Slack reply: %s", err)

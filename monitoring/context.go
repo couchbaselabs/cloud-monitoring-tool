@@ -5,10 +5,13 @@ const EKSClusterCloudIdTag = "CloudID"
 const CloudformationCloudIdParameter = "CloudID"
 
 type GlobalCloudContext struct {
-	RegionalCloudContexts map[string]RegionalCloudContext
+	CouchbaseClouds        map[string]*CouchbaseCloud
+	CouchbaseCloudClusters map[string]*CouchbaseCloudCluster
+	RegionalCloudContexts []RegionalCloudContext
 }
 
 type RegionalCloudContext struct {
+	Account				   string
 	Region                 string
 	EBSVolumes             map[string]EBSVolume
 	EC2Instances           map[string]EC2Instance
@@ -19,7 +22,7 @@ type RegionalCloudContext struct {
 }
 
 func (ctx *GlobalCloudContext) Add(regionalCtx RegionalCloudContext) {
-	ctx.RegionalCloudContexts[regionalCtx.Region] = regionalCtx
+	ctx.RegionalCloudContexts = append(ctx.RegionalCloudContexts, regionalCtx)
 }
 
 func (ctx *RegionalCloudContext) Claim(resource interface{}) {
@@ -47,12 +50,15 @@ func (ctx *RegionalCloudContext) Claim(resource interface{}) {
 
 func NewGlobalCloudContext() *GlobalCloudContext {
 	return &GlobalCloudContext{
-		RegionalCloudContexts: make(map[string]RegionalCloudContext),
+		CouchbaseClouds: make(map[string]*CouchbaseCloud),
+		CouchbaseCloudClusters: make(map[string]*CouchbaseCloudCluster),
+		RegionalCloudContexts: make([]RegionalCloudContext, 100),
 	}
 }
 
-func NewRegionalCloudContext(region string) *RegionalCloudContext {
+func NewRegionalCloudContext(account string, region string) *RegionalCloudContext {
 	return &RegionalCloudContext{
+		Account:				account,
 		Region:                 region,
 		EBSVolumes:             make(map[string]EBSVolume),
 		EC2Instances:           make(map[string]EC2Instance),
