@@ -49,6 +49,6 @@ crontab -r
 
 echo "Adding scheduled cronjob"
 
-echo "0 8 * * 1 docker run --env-file $ENV_FILE $AWS_ECR_URI:latest >> $LOGS_DIR 2>&1" | crontab -
+echo "0 9 * * 1 docker run --env-file $ENV_FILE $AWS_ECR_URI:latest >> $LOGS_DIR 2>&1" | crontab -
 
 echo "Deployment of $NAME is complete!"
