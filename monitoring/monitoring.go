@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
@@ -11,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/eks"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/sts"
-	"github.com/couchbaselabs/couchbase-cloud-go-client/couchbasecloud"
+	"github.com/couchbaselabs/couchbase-cloud-go-client"
 	"log"
 	"math"
 	"os"
@@ -169,13 +170,14 @@ func getCallerId(s *session.Session) (*string, error) {
 	return result.User.UserName, err
 }
 
-func getCouchbaseClouds(client *couchbasecloud.CouchbaseCloudClient, clouds map[string]*CouchbaseCloud) error {
-	page := 1
-	lastPage := math.MaxInt16
+func getCouchbaseClouds(client couchbasecapella.APIClient, clouds map[string]*CouchbaseCloud, auth context.Context) error {
+	var page int32 = 1
+	var lastPage int32 = math.MaxInt16
 	cloudCount := 0
 
+
 	for ok := true; ok; ok = page <= lastPage {
-		listCloudsResponse, err := client.ListClouds(&couchbasecloud.ListCloudsOptions{Page: page, PerPage: 10})
+		listCloudsResponse, _, err := client.CloudsApi.CloudsList(auth).Page(page).PerPage(10).Execute()
 
 		if err != nil {
 			return err
@@ -185,16 +187,16 @@ func getCouchbaseClouds(client *couchbasecloud.CouchbaseCloudClient, clouds map[
 			cloud := NewCouchbaseCloud()
 			cloud.ID = cloudResponse.Id
 			cloud.Name = cloudResponse.Name
-			cloud.Region = cloudResponse.Region
-			cloud.Provider = cloudResponse.Provider
-			cloud.Status = cloudResponse.Status
+			//cloud.Region = cloudResponse.Region //Fix structure to account for multiple regions/slackbot formatting?
+			cloud.Provider = string(cloudResponse.Provider)
+			cloud.Status = string(cloudResponse.Status)
 			cloud.VirtualNetworkCIDR = cloudResponse.VirtualNetworkCIDR
 			cloud.VirtualNetworkID = cloudResponse.VirtualNetworkID
 			clouds[cloud.ID] = cloud
 			cloudCount++
 		}
 
-		lastPage = listCloudsResponse.Cursor.Pages.Last
+		lastPage = *listCloudsResponse.Cursor.Pages.Last
 		page++
 	}
 
@@ -202,13 +204,14 @@ func getCouchbaseClouds(client *couchbasecloud.CouchbaseCloudClient, clouds map[
 	return nil
 }
 
-func getCouchbaseClusters(client *couchbasecloud.CouchbaseCloudClient, clusters map[string]*CouchbaseCloudCluster) error {
-	page := 1
-	lastPage := math.MaxInt16
+//Hosted vs Normal Clusters
+func getCouchbaseClusters(client couchbasecapella.APIClient, clusters map[string]*CouchbaseCloudCluster, auth context.Context) error {
+	var page int32 = 1
+	var lastPage int32 = math.MaxInt16
 	clusterCount := 0
 
 	for ok := true; ok; ok = page <= lastPage {
-		listClustersResponse, err := client.ListClusters(&couchbasecloud.ListClustersOptions{Page: page, PerPage: 10})
+		listClustersResponse, _, err := client.ClustersApi.ClustersList(auth).Page(page).PerPage(10).Execute()
 
 		if err != nil {
 			return err
@@ -218,13 +221,13 @@ func getCouchbaseClusters(client *couchbasecloud.CouchbaseCloudClient, clusters 
 			cluster := NewCouchbaseCloudCluster()
 			cluster.ID = clusterResponse.Id
 			cluster.Name = clusterResponse.Name
-			cluster.NodeCount = clusterResponse.Nodes
-			cluster.Services = clusterResponse.Services
+			cluster.NodeCount = int(clusterResponse.Nodes)
+			//cluster.Services = clusterResponse.Services //Map services[] to string[]
 			clusters[cluster.ID] = cluster
 			clusterCount++
 		}
 
-		lastPage = listClustersResponse.Cursor.Pages.Last
+		lastPage = *listClustersResponse.Cursor.Pages.Last
 		page++
 	}
 
@@ -580,17 +583,30 @@ func getCouchbaseCloudData(accessKeys []string, secretKeys []string) (map[string
 	clusters := map[string]*CouchbaseCloudCluster{}
 
 	for idx := range accessKeys {
-		accessKey := accessKeys[idx]
-		secretKey := secretKeys[idx]
+		//accessKey := accessKeys[idx]
+		//secretKey := secretKeys[idx]
+		var auth = context.WithValue(
+			context.Background(),
+			couchbasecapella.ContextAPIKeys,
+			map[string]couchbasecapella.APIKey{
+				"accessKey": {
+					Key: accessKeys[idx],
+				},
+				"secretKey": {
+					Key: secretKeys[idx],
+				},
+			},
+		)
+		configuration := couchbasecapella.NewConfiguration()
+		client := *couchbasecapella.NewAPIClient(configuration)
 
-		client := couchbasecloud.NewClient(accessKey, secretKey)
-		err := getCouchbaseClouds(client, clouds)
+		err := getCouchbaseClouds(client, clouds, auth)
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to retrieve couchbase Couchbase Clouds: %s", err)
 		}
 
-		err = getCouchbaseClusters(client, clusters)
+		err = getCouchbaseClusters(client, clusters, auth)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to retrieve couchbase Couchbase clusters: %s", err)
 		}
