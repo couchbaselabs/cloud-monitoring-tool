@@ -206,7 +206,7 @@ func sendCouchbaseCloudReplies(client *slack.Client, channelId string, couchbase
 		var message bytes.Buffer
 		message.WriteString(fmt.Sprintf("*Name*: `%s`\n", cloud.Name))
 		message.WriteString(fmt.Sprintf("*Provider*: `%s`\n", cloud.Provider))
-		message.WriteString(fmt.Sprintf("*Region*: `%s`\n", cloud.Region))
+		message.WriteString(fmt.Sprintf("*Regions*: `AWS: %s`, `Azure: %s`\n", cloud.CloudRegion.AwsRegion, cloud.CloudRegion.AzureRegion))
 		message.WriteString(fmt.Sprintf("*Virtual Network CIDR*: `%s`\n", cloud.VirtualNetworkCIDR))
 		message.WriteString(fmt.Sprintf("*EKS clusters*: `%d`\n", len(cloud.EKSClusters)))
 		message.WriteString(fmt.Sprintf("*Status*: `%s`\n", cloud.Status))
@@ -216,14 +216,15 @@ func sendCouchbaseCloudReplies(client *slack.Client, channelId string, couchbase
 		}
 	}
 }
-
 func sendCouchbaseCloudClusterReplies(client *slack.Client, channelId string, couchbaseCloudClusters []monitoring.CouchbaseCloudCluster, timestamp string) {
 	log.Println("Sending throttled slack replies for Couchbase Cloud clusters")
 	for _, cluster := range couchbaseCloudClusters {
 		var message bytes.Buffer
 		message.WriteString(fmt.Sprintf("*Name*: `%s`\n", cluster.Name))
-		message.WriteString(fmt.Sprintf("*Node Count*: `%d`\n", cluster.NodeCount))
-		message.WriteString(fmt.Sprintf("*Services*: `%s`\n", strings.Join(cluster.Services, ", ")))
+		if cluster.Environment != "hosted" {
+			message.WriteString(fmt.Sprintf("*Node Count*: `%d`\n", cluster.NodeCount))
+			message.WriteString(fmt.Sprintf("*Services*: `%s`\n", strings.Join(cluster.Services, ", ")))
+		}
 
 		if err := sendSlackReply(client, channelId, timestamp, message.String()); err != nil {
 			log.Printf("Unable to send Slack reply: %s", err)

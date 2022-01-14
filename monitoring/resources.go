@@ -3,6 +3,7 @@ package monitoring
 import (
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	couchbasecapella "github.com/couchbaselabs/couchbase-cloud-go-client"
 	"time"
 )
 
@@ -44,6 +45,9 @@ type CouchbaseCloudCluster struct {
 	EKSClusterName string
 	EC2Instances   map[string]EC2Instance
 	Seen           bool
+	CloudID        *string
+	ProjectID      string
+	Environment    string
 }
 
 type EKSCluster struct {
@@ -64,6 +68,11 @@ type CloudformationStack struct {
 	EKSClusters       map[string]EKSCluster
 }
 
+type CloudRegion struct {
+	AwsRegion string
+	AzureRegion string
+}
+
 type CouchbaseCloud struct {
 	CloudResource
 	Provider            string
@@ -72,6 +81,7 @@ type CouchbaseCloud struct {
 	VirtualNetworkID    string
 	EKSClusters         map[string]EKSCluster
 	CloudFormationStack *CloudformationStack
+	CloudRegion			CloudRegion
 	Seen                bool
 }
 
@@ -113,6 +123,26 @@ func NewCouchbaseCloud() *CouchbaseCloud {
 	return &CouchbaseCloud{
 		EKSClusters: make(map[string]EKSCluster),
 	}
+}
+
+func NewCloudRegion(regions couchbasecapella.Regions) CloudRegion{
+	var CloudRegion CloudRegion
+	if regions.AwsRegions != nil {
+		CloudRegion.AwsRegion =  (string)(*regions.AwsRegions)
+	}
+	if regions.AzureRegions != nil {
+		CloudRegion.AzureRegion =  (string)(*regions.AzureRegions)
+	}
+
+	return CloudRegion
+}
+
+func ParseServices(services []couchbasecapella.CouchbaseServices) []string {
+	var strings []string
+	for _, service := range services {
+		strings = append(strings, string(service))
+	}
+	return strings
 }
 
 func (ec2Instance *EC2Instance) Claim(ctx *RegionalCloudContext, resource interface{}) {
