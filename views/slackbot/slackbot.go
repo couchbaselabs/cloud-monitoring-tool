@@ -206,7 +206,14 @@ func sendCouchbaseCloudReplies(client *slack.Client, channelId string, couchbase
 		var message bytes.Buffer
 		message.WriteString(fmt.Sprintf("*Name*: `%s`\n", cloud.Name))
 		message.WriteString(fmt.Sprintf("*Provider*: `%s`\n", cloud.Provider))
-		message.WriteString(fmt.Sprintf("*Regions*: `AWS: %s`, `Azure: %s`\n", cloud.CloudRegion.AwsRegion, cloud.CloudRegion.AzureRegion))
+		regions := ""
+		if cloud.CloudRegion.AwsRegion != "" {
+			regions += fmt.Sprintf("*Regions*: `AWS: %s`", cloud.CloudRegion.AwsRegion)
+		}
+		if cloud.CloudRegion.AzureRegion != "" {
+			regions += fmt.Sprintf(", *Regions*: `Azure: %s`", cloud.CloudRegion.AzureRegion)
+		}
+		message.WriteString(regions)
 		message.WriteString(fmt.Sprintf("*Virtual Network CIDR*: `%s`\n", cloud.VirtualNetworkCIDR))
 		message.WriteString(fmt.Sprintf("*EKS clusters*: `%d`\n", len(cloud.EKSClusters)))
 		message.WriteString(fmt.Sprintf("*Status*: `%s`\n", cloud.Status))
