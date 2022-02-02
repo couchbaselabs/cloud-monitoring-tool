@@ -171,13 +171,13 @@ func getCallerId(s *session.Session) (*string, error) {
 }
 
 func getCouchbaseClouds(client couchbasecapella.APIClient, clouds map[string]*CouchbaseCloud, auth context.Context) error {
-	var page int32 = 1
-	var lastPage int32 = math.MaxInt16
+	page := 1
+	lastPage := math.MaxInt
 	cloudCount := 0
 
 
 	for ok := true; ok; ok = page <= lastPage {
-		listCloudsResponse, _, err := client.CloudsApi.CloudsList(auth).Page(page).PerPage(10).Execute()
+		listCloudsResponse, _, err := client.CloudsApi.CloudsList(auth).Page(int32(page)).PerPage(10).Execute()
 
 		if err != nil {
 			return err
@@ -196,7 +196,13 @@ func getCouchbaseClouds(client couchbasecapella.APIClient, clouds map[string]*Co
 			cloudCount++
 		}
 
-		lastPage = *listCloudsResponse.Cursor.Pages.Last
+		last := listCloudsResponse.Cursor.Pages.Last
+		if last != nil {
+			lastPage = int(*listCloudsResponse.Cursor.Pages.Last)
+		} else {
+			lastPage = page
+		}
+
 		page++
 	}
 
@@ -206,7 +212,7 @@ func getCouchbaseClouds(client couchbasecapella.APIClient, clouds map[string]*Co
 
 func getCouchbaseClusters(client couchbasecapella.APIClient, clusters map[string]*CouchbaseCloudCluster, auth context.Context) error {
 	page := 1
-	lastPage := math.MaxInt16
+	lastPage := math.MaxInt
 	clusterCount := 0
 
 	for ok := true; ok; ok = page <= lastPage {
@@ -226,7 +232,13 @@ func getCouchbaseClusters(client couchbasecapella.APIClient, clusters map[string
 			clusterCount++
 		}
 
-		lastPage = int(*listClustersResponse.Cursor.Pages.Last)
+		last := listClustersResponse.Cursor.Pages.Last
+		if last != nil {
+			lastPage = int(*listClustersResponse.Cursor.Pages.Last)
+		} else {
+			lastPage = page
+		}
+
 		page++
 	}
 
@@ -235,12 +247,12 @@ func getCouchbaseClusters(client couchbasecapella.APIClient, clusters map[string
 }
 
 func getHostedCouchbaseClusters(client couchbasecapella.APIClient, clusters map[string]*CouchbaseCloudCluster, auth context.Context) error {
-	var page int32 = 1
-	var lastPage int32 = math.MaxInt16
+	page := 1
+	lastPage := math.MaxInt
 	clusterCount := 0
 
 	for ok := true; ok; ok = page <= lastPage {
-		listClustersResponse, _, err := client.ClustersV3Api.ClustersV3list(auth).Page(page).PerPage(10).Execute()
+		listClustersResponse, _, err := client.ClustersV3Api.ClustersV3list(auth).Page(int32(page)).PerPage(10).Execute()
 
 		if err != nil {
 			return err
@@ -257,7 +269,13 @@ func getHostedCouchbaseClusters(client couchbasecapella.APIClient, clusters map[
 			}
 		}
 
-		lastPage = *listClustersResponse.Cursor.Pages.Last
+		last := listClustersResponse.Cursor.Pages.Last
+		if last != nil {
+			lastPage = int(*listClustersResponse.Cursor.Pages.Last)
+		} else {
+			lastPage = page
+		}
+
 		page++
 	}
 
