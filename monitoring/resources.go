@@ -81,7 +81,7 @@ type CouchbaseCloud struct {
 	VirtualNetworkID    string
 	EKSClusters         map[string]EKSCluster
 	CloudFormationStack *CloudformationStack
-	CloudRegion			CloudRegion
+	CloudRegion         CloudRegion
 	Seen                bool
 }
 
@@ -128,7 +128,7 @@ func NewCouchbaseCloud() *CouchbaseCloud {
 func NewCloudRegion(regions couchbasecapella.Regions) CloudRegion{
 	var CloudRegion CloudRegion
 	if regions.AwsRegions != nil {
-		CloudRegion.AwsRegion =  (string)(*regions.AwsRegions)
+		CloudRegion.AwsRegion =  string(*regions.AwsRegions)
 	}
 	if regions.AzureRegions != nil {
 		CloudRegion.AzureRegion =  (string)(*regions.AzureRegions)
