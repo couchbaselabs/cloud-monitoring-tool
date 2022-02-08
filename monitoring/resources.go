@@ -69,7 +69,7 @@ type CloudformationStack struct {
 }
 
 type CloudRegion struct {
-	AwsRegion string
+	AwsRegion   string
 	AzureRegion string
 }
 
@@ -125,13 +125,13 @@ func NewCouchbaseCloud() *CouchbaseCloud {
 	}
 }
 
-func NewCloudRegion(regions couchbasecapella.Regions) CloudRegion{
+func NewCloudRegion(regions couchbasecapella.Regions) CloudRegion {
 	var CloudRegion CloudRegion
 	if regions.AwsRegions != nil {
-		CloudRegion.AwsRegion =  string(*regions.AwsRegions)
+		CloudRegion.AwsRegion = string(*regions.AwsRegions)
 	}
 	if regions.AzureRegions != nil {
-		CloudRegion.AzureRegion =  (string)(*regions.AzureRegions)
+		CloudRegion.AzureRegion = string(*regions.AzureRegions)
 	}
 
 	return CloudRegion
