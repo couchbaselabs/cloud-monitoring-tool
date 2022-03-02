@@ -7,6 +7,7 @@ import (
 	"github.com/slack-go/slack"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -205,7 +206,7 @@ func sendCouchbaseCloudReplies(client *slack.Client, channelId string, couchbase
 		var message bytes.Buffer
 		message.WriteString(fmt.Sprintf("*Name*: `%s`\n", cloud.Name))
 		message.WriteString(fmt.Sprintf("*Provider*: `%s`\n", cloud.Provider))
-		message.WriteString(fmt.Sprintf("*Region*: `%s`\n", cloud.Region))
+		message.WriteString(fmt.Sprintf("*Regions*: `AWS: [%s], Azure: [%s]`\n", cloud.CloudRegion.AwsRegion, cloud.CloudRegion.AzureRegion))
 		message.WriteString(fmt.Sprintf("*Virtual Network CIDR*: `%s`\n", cloud.VirtualNetworkCIDR))
 		message.WriteString(fmt.Sprintf("*EKS clusters*: `%d`\n", len(cloud.EKSClusters)))
 		message.WriteString(fmt.Sprintf("*Status*: `%s`\n", cloud.Status))
@@ -215,14 +216,15 @@ func sendCouchbaseCloudReplies(client *slack.Client, channelId string, couchbase
 		}
 	}
 }
-
 func sendCouchbaseCloudClusterReplies(client *slack.Client, channelId string, couchbaseCloudClusters []monitoring.CouchbaseCloudCluster, timestamp string) {
 	log.Println("Sending throttled slack replies for Couchbase Cloud clusters")
 	for _, cluster := range couchbaseCloudClusters {
 		var message bytes.Buffer
 		message.WriteString(fmt.Sprintf("*Name*: `%s`\n", cluster.Name))
-		message.WriteString(fmt.Sprintf("*Node Count*: `%d`\n", cluster.NodeCount))
-		message.WriteString(fmt.Sprintf("*Services*: `%s`\n", strings.Join(cluster.Services, ", ")))
+		if cluster.Environment != "hosted" {
+			message.WriteString(fmt.Sprintf("*Node Count*: `%d`\n", cluster.NodeCount))
+			message.WriteString(fmt.Sprintf("*Services*: `%s`\n", strings.Join(cluster.Services, ", ")))
+		}
 
 		if err := sendSlackReply(client, channelId, timestamp, message.String()); err != nil {
 			log.Printf("Unable to send Slack reply: %s", err)
@@ -243,7 +245,7 @@ func sendCloudformationStackReplies(client *slack.Client, channelId string, clou
 
 		message.WriteString(fmt.Sprintf("*Region*: `%s`\n", cloudformationStack.Region))
 		message.WriteString(fmt.Sprintf("*Resource Count*: `%d`\n", len(cloudformationStack.StackResourceList)))
-		message.WriteString(fmt.Sprintf("*Age*: `%s`\n", cloudformationStack.CreationDuration))
+		message.WriteString(fmt.Sprintf("*Age*: `%s`\n", getAgeAsString(cloudformationStack.CreationDuration)))
 
 		if len(cloudformationStack.EC2Instances) > 0 {
 			message.WriteString(fmt.Sprintf("*EC2 Instances*: `%d`\n", len(cloudformationStack.EC2Instances)))
@@ -265,7 +267,7 @@ func sendEKSClusterReplies(client *slack.Client, channelId string, eksClusters [
 		message.WriteString(fmt.Sprintf("*Name*: `%s`\n", eksCluster.Name))
 		message.WriteString(fmt.Sprintf("*Worker Nodes*: `%d`\n", len(eksCluster.EC2Instances)))
 		message.WriteString(fmt.Sprintf("*Subnets*: `%d`\n", len(eksCluster.Subnets)))
-		message.WriteString(fmt.Sprintf("*Age*: `%s`\n", eksCluster.Age))
+		message.WriteString(fmt.Sprintf("*Age*: `%s`\n", getAgeAsString(eksCluster.Age)))
 		message.WriteString(fmt.Sprintf("Created: `%s`\n", eksCluster.CreatedAt.UTC().Format(dateLayout)))
 		message.WriteString(fmt.Sprintf("*Account*: `%s`\n", eksCluster.Account))
 
@@ -273,6 +275,39 @@ func sendEKSClusterReplies(client *slack.Client, channelId string, eksClusters [
 			log.Printf("Unable to send Slack reply: %s", err)
 		}
 	}
+}
+
+func getAgeAsString(age time.Duration) string {
+	now := time.Now()
+	hours := age.Hours()
+	created := now.Add(time.Hour * -time.Duration(hours))
+
+	days := 0
+	months := 0
+	month := created.Month()
+	for created.Before(now.Add(time.Hour * 24)) {
+		created = created.Add(time.Hour * 24)
+		nextMonth := created.Month()
+		if nextMonth != month {
+			months++
+		}
+		if created.Year() == now.Year() && month == now.Month() {
+			days++
+		}
+
+		month = nextMonth
+	}
+
+	//Text formatting
+	monthText := " month, "
+	weekText := " week"
+	if months != 1 {
+		monthText = " months, "
+	}
+	if days/7 != 1 {
+		weekText = " weeks"
+	}
+	return strconv.Itoa(months) + monthText + strconv.Itoa(days/7) + weekText
 }
 
 func sendEC2InstancesReplies(client *slack.Client, channelId string, ec2Instances []monitoring.EC2Instance, timestamp string) {

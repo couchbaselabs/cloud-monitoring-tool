@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
@@ -11,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/eks"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/sts"
-	"github.com/couchbaselabs/couchbase-cloud-go-client/couchbasecloud"
+	"github.com/couchbaselabs/couchbase-cloud-go-client"
 	"log"
 	"math"
 	"os"
@@ -169,13 +170,14 @@ func getCallerId(s *session.Session) (*string, error) {
 	return result.User.UserName, err
 }
 
-func getCouchbaseClouds(client *couchbasecloud.CouchbaseCloudClient, clouds map[string]*CouchbaseCloud) error {
+func getCouchbaseClouds(client couchbasecapella.APIClient, clouds map[string]*CouchbaseCloud, auth context.Context) error {
 	page := 1
-	lastPage := math.MaxInt16
+	lastPage := math.MaxInt
 	cloudCount := 0
 
+
 	for ok := true; ok; ok = page <= lastPage {
-		listCloudsResponse, err := client.ListClouds(&couchbasecloud.ListCloudsOptions{Page: page, PerPage: 10})
+		listCloudsResponse, _, err := client.CloudsApi.CloudsList(auth).Page(int32(page)).PerPage(10).Execute()
 
 		if err != nil {
 			return err
@@ -185,16 +187,22 @@ func getCouchbaseClouds(client *couchbasecloud.CouchbaseCloudClient, clouds map[
 			cloud := NewCouchbaseCloud()
 			cloud.ID = cloudResponse.Id
 			cloud.Name = cloudResponse.Name
-			cloud.Region = cloudResponse.Region
-			cloud.Provider = cloudResponse.Provider
-			cloud.Status = cloudResponse.Status
+			cloud.CloudRegion = NewCloudRegion(cloudResponse.Region)
+			cloud.Provider = string(cloudResponse.Provider)
+			cloud.Status = string(cloudResponse.Status)
 			cloud.VirtualNetworkCIDR = cloudResponse.VirtualNetworkCIDR
 			cloud.VirtualNetworkID = cloudResponse.VirtualNetworkID
 			clouds[cloud.ID] = cloud
 			cloudCount++
 		}
 
-		lastPage = listCloudsResponse.Cursor.Pages.Last
+		last := listCloudsResponse.Cursor.Pages.Last
+		if last != nil {
+			lastPage = int(*listCloudsResponse.Cursor.Pages.Last)
+		} else {
+			lastPage = page
+		}
+
 		page++
 	}
 
@@ -202,13 +210,13 @@ func getCouchbaseClouds(client *couchbasecloud.CouchbaseCloudClient, clouds map[
 	return nil
 }
 
-func getCouchbaseClusters(client *couchbasecloud.CouchbaseCloudClient, clusters map[string]*CouchbaseCloudCluster) error {
+func getCouchbaseClusters(client couchbasecapella.APIClient, clusters map[string]*CouchbaseCloudCluster, auth context.Context) error {
 	page := 1
-	lastPage := math.MaxInt16
+	lastPage := math.MaxInt
 	clusterCount := 0
 
 	for ok := true; ok; ok = page <= lastPage {
-		listClustersResponse, err := client.ListClusters(&couchbasecloud.ListClustersOptions{Page: page, PerPage: 10})
+		listClustersResponse, _, err := client.ClustersApi.ClustersList(auth).Page(int32(page)).PerPage(10).Execute()
 
 		if err != nil {
 			return err
@@ -218,17 +226,60 @@ func getCouchbaseClusters(client *couchbasecloud.CouchbaseCloudClient, clusters 
 			cluster := NewCouchbaseCloudCluster()
 			cluster.ID = clusterResponse.Id
 			cluster.Name = clusterResponse.Name
-			cluster.NodeCount = clusterResponse.Nodes
-			cluster.Services = clusterResponse.Services
+			cluster.NodeCount = int(clusterResponse.Nodes)
+			cluster.Services = ParseServices(clusterResponse.Services)
 			clusters[cluster.ID] = cluster
 			clusterCount++
 		}
 
-		lastPage = listClustersResponse.Cursor.Pages.Last
+		last := listClustersResponse.Cursor.Pages.Last
+		if last != nil {
+			lastPage = int(*listClustersResponse.Cursor.Pages.Last)
+		} else {
+			lastPage = page
+		}
+
 		page++
 	}
 
 	log.Printf("Found %d Couchbase Clusters", clusterCount)
+	return nil
+}
+
+func getHostedCouchbaseClusters(client couchbasecapella.APIClient, clusters map[string]*CouchbaseCloudCluster, auth context.Context) error {
+	page := 1
+	lastPage := math.MaxInt
+	clusterCount := 0
+
+	for ok := true; ok; ok = page <= lastPage {
+		listClustersResponse, _, err := client.ClustersV3Api.ClustersV3list(auth).Page(int32(page)).PerPage(10).Execute()
+
+		if err != nil {
+			return err
+		}
+
+		for _, clusterResponse := range listClustersResponse.Data.GetItems() {
+			cluster := NewCouchbaseCloudCluster()
+			cluster.ID = clusterResponse.Id
+			cluster.Name = clusterResponse.Name
+			cluster.Environment = clusterResponse.Environment
+			if _, ok := clusters[cluster.ID]; !ok {
+				clusters[cluster.ID] = cluster
+				clusterCount++
+			}
+		}
+
+		last := listClustersResponse.Cursor.Pages.Last
+		if last != nil {
+			lastPage = int(*listClustersResponse.Cursor.Pages.Last)
+		} else {
+			lastPage = page
+		}
+
+		page++
+	}
+
+	log.Printf("Found %d Hosted Couchbase Clusters", clusterCount)
 	return nil
 }
 
@@ -580,19 +631,35 @@ func getCouchbaseCloudData(accessKeys []string, secretKeys []string) (map[string
 	clusters := map[string]*CouchbaseCloudCluster{}
 
 	for idx := range accessKeys {
-		accessKey := accessKeys[idx]
-		secretKey := secretKeys[idx]
+		var auth = context.WithValue(
+			context.Background(),
+			couchbasecapella.ContextAPIKeys,
+			map[string]couchbasecapella.APIKey{
+				"accessKey": {
+					Key: accessKeys[idx],
+				},
+				"secretKey": {
+					Key: secretKeys[idx],
+				},
+			},
+		)
 
-		client := couchbasecloud.NewClient(accessKey, secretKey)
-		err := getCouchbaseClouds(client, clouds)
+		configuration := couchbasecapella.NewConfiguration()
+		client := *couchbasecapella.NewAPIClient(configuration)
 
+		err := getCouchbaseClouds(client, clouds, auth)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to retrieve couchbase Couchbase Clouds: %s", err)
 		}
 
-		err = getCouchbaseClusters(client, clusters)
+		err = getCouchbaseClusters(client, clusters, auth)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to retrieve couchbase Couchbase clusters: %s", err)
+		}
+
+		err = getHostedCouchbaseClusters(client, clusters, auth)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to retrieve couchbase Hosted Couchbase clusters: %s", err)
 		}
 	}
 
